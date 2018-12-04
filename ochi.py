@@ -14,16 +14,16 @@ rc('text', usetex=True)
 
 tol=1e-3
 eqzero=1e-6 # angle indistinguishable from 0 
-# parameters of  pulsar losses 
+# parameters of  pulsar losses  (Philippov et al., 2014)
 k0=1. #
-k1=1.2
+k1=1. # Sasha has 1.2
 k2=1.
 m0=1.4 # initial NS mass, Msun units
 mmax=2.0 # final NS mass
 q1=0.0
 qsat=1e-8 # saturation value of deformation
 
-rstar = 6. # radius (fixed! in GMsun/c**2 units; 10GMsun/c**2 units \simeq 15km )
+rstar = 8.5 # radius (fixed! in GMsun/c**2 units; 10GMsun/c**2 units \simeq 15km )
 beta=1.
 
 mburial=True # magnetic field burial 
@@ -41,13 +41,17 @@ tohm=1e7 # Ohmic dissipation time
 thall=1e9 # Hall decay for mu = 10^30
 
 def izero(m, r):
-    return 0.1 * m * r**2 # some fancy moment of inertia
+    return 23.0528 * m  # this corresponds to 10^45 for one Msun
+# in general, I is in Msun * (G Msun/c**2)**2
 
 def qfun(x, q1, qsat): # x = dm/m_0
     return -q1 * x  /(1.+q1*x/qsat)
 
 def dqfun(x, q1, qsat):
     return -q1 /(1.+q1*x/qsat)**2 
+
+def afun(beta, sina, cosa, sichi, cochi):
+    return 1. + beta * ((sina*sichi)**2/2.+(cosa*cochi)**2)
 
 def mufun(mu0, deltam, deltam0, pslope, mufloor):
     # magnetic field burial, according to Melatos& Payne
@@ -62,8 +66,10 @@ def torques(omega, mu, mdot, sichi, cochi, q, m):
     calculates all the torque components acting on a NS
     output: spin-up moment, X-ray pulsar magnitospheric losses, pulsar losses (x and z), GW losses (x and z)
     '''
-    jrat=8.036e6*sqrt(xi)*mu**(2./7.)*m**(3./7.)*mdot**(-1./7.)
-
+    ral = 1577.74 * mu**(4./7.)/mdot**(2./7.)/m**(1./7.) # alfven radius in GMsun/c^2
+    jrat= 2.03007e5 * maximum(sqrt(xi * ral), sqrt(rstar)) # either half Alfven radius or the radius of the star
+    #    8.036e6*sqrt(xi)*mu**(2./7.)*m**(3./7.)*mdot**(-1./7.) # all re-calculated to domega/dM, M in Msun
+    
     jIK=2.11e6*mu**2.*omega**2./mdot/m # X-ray pulsar losses according to Illarionov-Kompaneets, 1990
     jp=10.4*mu**2*omega**3/mdot 
     jpz=jp*(k0+k1*sichi**2) # spin-down law, see Philippov et al. (2014), eq 15
@@ -77,7 +83,8 @@ def torques(omega, mu, mdot, sichi, cochi, q, m):
 #######################################################################
 def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True):
     # with omega-aligned losses, j_- \propto \mu^2/R_A^3 or \mu^2/R_C^3
-
+    # mdot in 4piGMsun/ckappa
+    
     m=m0 ; md=m0 ;  dm=1e-4 ; dm0=dm 
     mueff=mu30 # effective magnetic moment 
     
@@ -135,7 +142,7 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
         if(abs(a)>eqzero):
             sina=sin(a)
             cosa=cos(a)
-        b=sina*sichi*cosa*cochi*beta
+        b=sina**2*sichi*cosa*cochi*beta/afun(beta, sina, cosa, sichi, cochi)
         if (mburial):
             if(ifmudec):
                 mueff=mudec(mu30, (md-m0)/mdot, tohm/4e8, thall/mu30/4e8) # time scales in c kappa / 4 / pi / G units
