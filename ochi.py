@@ -24,13 +24,18 @@ q1=0.0
 qsat=1e-8 # saturation value of deformation
 
 rstar = 8.5 # radius (fixed! in GMsun/c**2 units; 10GMsun/c**2 units \simeq 15km )
-beta=1.
+beta=10.
 
+# switches for physical effects:
+parfrey = False
 mburial=True # magnetic field burial 
 ifmudec=False # magnetic field decay
+deathline = False # death line
+
+death_muos = 13.1 # critical value of mu30 * Omega(s)^2 
 pafrac=0.0 # in propeller stage, pafrac of matter and angular momentum is actually accreted
-pslope=2.25 # mu \propto (Delta M/Delta M0)^-p during burial
-deltam0=4.65e-5  # mu \propto (Delta M/Delta M0)^-p during burial
+pslope=14./11. # mu \propto (Delta M/Delta M0)^-p during burial
+deltam0=0.00563863/rstar**3  # mu \propto (Delta M/Delta M0)^-p during burial
 mufloor=0. # undecayable part of the field 
 xi=0.5 # Alfven radius modifier
 kIK=1./3. #k/2\pi from Illarionov-Kompaneets 1990
@@ -54,7 +59,7 @@ def afun(beta, sina, cosa, sichi, cochi):
     return 1. + beta * ((sina*sichi)**2/2.+(cosa*cochi)**2)
 
 def mufun(mu0, deltam, deltam0, pslope, mufloor):
-    # magnetic field burial, according to Melatos& Payne
+    # magnetic field burial, according to Melatos& Phinney (2001)
     return mu0*(1.+deltam/deltam0)**(-pslope)+mufloor
 
 def mudec(mu0, t, tohm, thall):
@@ -108,6 +113,7 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
 
     if(verbose):
         otrace=open('aotrace.dat', 'w')
+        otrace.write('# md(Msun) -- m(Msun) -- Omega(s) -- a -- chi\n')
         start = time.time()
     
     while(md<mmax):
@@ -129,20 +135,23 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
             afrac=pafrac # propeller state
         else:
             afrac=1. # accreting
-
         if (omega<opul) & xlosses: 
             bfrac=1.
         else:
             bfrac=0.  # ejector
-        pfrac = maximum(1., (opul/omega)**2) # Parfrey's modifier
-            
+        pfrac=1.
+        if(parfrey):
+            pfrac = maximum(1., (opul/omega)**2) # Parfrey's modifier
+        if(deathline & ((omega**2 * mueff) < death_muos)):
+            pfrac = 0. # death line
+        
         if(abs(chi)>eqzero): # accurate treatment of the cases chi\to 0, alpha \to 0 (do we need it?)
             sichi=sin(chi)
             cochi=cos(chi)
         if(abs(a)>eqzero):
             sina=sin(a)
             cosa=cos(a)
-        b=sina**2*sichi*cosa*cochi*beta/afun(beta, sina, cosa, sichi, cochi)
+        b=sina*sichi*cosa*cochi*beta/afun(beta, sina, cosa, sichi, cochi)
         if (mburial):
             if(ifmudec):
                 mueff=mudec(mu30, (md-m0)/mdot, tohm/4e8, thall/mu30/4e8) # time scales in c kappa / 4 / pi / G units
@@ -165,8 +174,24 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
         a1 = a + da*dm/2.
         sina=sin(a1)
         cosa=cos(a1)
+        b=sina*sichi*cosa*cochi*beta/afun(beta, sina, cosa, sichi, cochi)
         omega1=l1/imid # about the mean omega (moment of inertial included, meaning we actually evolve l not omega)
         #        jlim=1.48e5*sqrt(m*rstar)
+        ofast=0.31*mueff**(6./7.)/m**(5./7.)/mdot**(3./7.)*omega1 # fastness parameter
+        opul=127.6/xi*(mdot*sqrt(m)/mueff**2.)**(2./7.) # period when the light cylinder coincides with the radius of the magnetosphere
+        if(((ofast>=1.)&xlosses)|(omega1>opul)):
+            afrac=pafrac # propeller state
+        else:
+            afrac=1. # accreting
+        if (omega1<opul) & xlosses: 
+            bfrac=1.
+        else:
+            bfrac=0.  # ejector
+        pfrac=1.
+        if(parfrey):
+            pfrac = maximum(1., (opul/omega)**2) # Parfrey's modifier
+        if(deathline & ((omega1**2 * mueff) < death_muos)):
+            pfrac = 0. # death line
         jrat, jIK, jpx, jpz, jgwx, jgwz  = torques(omega1, mueff, mdot, sichi, cochi, q, m)
         jrat *= afrac ; jIK *= bfrac ; jpx *= pfrac ; jpz *= pfrac
         domega=((1.+q*sichi**2)*(jrat*cosa-jIK-jpz-jgwz)-dq*l1*cochi**2- b * q *jrat * sina- q * jpx * sichi * cochi)/(q+1.)
@@ -199,7 +224,7 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
             atr.append(a)
             ctr.append(chi)
             qtr.append(q)
-            otrace.write(str(m)+' '+str(omega)+' '+str(a)+' '+str(chi)+'\n')
+            otrace.write(str(md)+' '+str(m)+' '+str(omega)+' '+str(a)+' '+str(chi)+'\n')
             otrace.flush()
             fasttr.append(ofast)
             pultr.append(omega/opul)
@@ -488,3 +513,6 @@ def aomap_achi():
     xlabel(r'$\Omega_{\rm fin}$',fontsize=16)
     ylabel(r'$\chi_{\rm fin}$',fontsize=16)
     savefig('caoochi.eps')
+
+
+aochi(omega0=2.*pi/5., chi0=pi*(0.5-1./36.), alpha0=0.75*pi, mu30=1., mdot0=1.0, verbose=True)
