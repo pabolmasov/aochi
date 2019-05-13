@@ -31,6 +31,7 @@ parfrey = False
 mburial=True # magnetic field burial 
 ifmudec=False # magnetic field decay
 deathline = False # death line
+ifIK = True # turns on IK90 scaling for spin-down (Ghosh-Lamb 78/79 instead)
 
 death_muos = 13.1 # critical value of mu30 * Omega(s)^2 
 pafrac=0.0 # in propeller stage, pafrac of matter and angular momentum is actually accreted
@@ -65,6 +66,12 @@ def mufun(mu0, deltam, deltam0, pslope, mufloor):
 def mudec(mu0, t, tohm, thall):
     # Aguilera et al.(2008)
     return mu0*exp(-t/tohm)/(1.+tohm/thall/mu0*(1.-exp(-t/tohm)))
+
+def fastnessfactor(ofast):
+    if(ifIK): # Illarionov-Kompaneets case
+        return 1./ofast
+    else:
+        return 1.
 
 def torques(omega, mu, mdot, sichi, cochi, q, m):
     '''
@@ -154,17 +161,10 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
         dq=dqfun(1.-m0/m, q1, qsat)/m # dq/dt
 
         jrat, jIK, jpx, jpz, jgwx, jgwz  = torques(omega, mueff, mdot, sichi, cochi, q, m)
+        if(ofast>0.):jIK *= fastnessfactor(ofast)
         jrat *= afrac ; jIK *= bfrac ; jpx *= pfrac ; jpz *= pfrac
         # we want the time step to adjust to the evolutionary time scales
         dm = l/sqrt((jpx**2+jpz**2)*pfrac+(jrat-jIK)**2*afrac+jIK**2*bfrac)*dm0
-        # (sqrt(jpx**2+jpz**2)*pfrac+(jrat*afrac*(1.-bfrac)+fabs(jrat-jIK)*afrac)*(1.-pfrac)) * dm0
-        #        print("omega = "+str(omega)+", opul = "+str(opul))
-#        print("ofast = "+str(ofast))
-#        print("dm = "+str(dm))
-#        print("jp = "+str(sqrt(jpx**2+jpz**2)))
-#        print("jrat = "+str(jrat))
-#        print("jIK = "+str(jIK))
-#        ii=input(dm)
 
         # we need to estimate the working omega:
         domega=((1.+q*sichi**2)*(jrat*cosa-jIK-jpz-jgwz)-dq*l*cochi**2 - b * q *jrat * sina - q * jpx * sichi * cochi)/(q+1.)
@@ -424,7 +424,7 @@ def aomap_mm():
 
 def aomap_achi():
 
-    recalc=False
+    recalc=True
     nchi=20
     na=21
 
@@ -517,5 +517,23 @@ def aomap_achi():
     ylabel(r'$\chi_{\rm fin}$',fontsize=16)
     savefig('caoochi.eps')
 
+def compare(infile1 = 'aotrace.dat', infile2 = 'aotrace1.dat'):
+    data1 = loadtxt(infile1)  ;  data2 = loadtxt(infile2)
+    m1 = data1[:,1] ; omega1 = data1[:,2] ; a1 = data1[:,3] ; chi1 = data1[:,4]
+    m2 = data2[:,1] ; omega2 = data1[:,2] ; a2 = data2[:,3] ; chi2 = data2[:,4]
 
-aochi(omega0=2.*pi/0.5, chi0=pi*(0.5-1./36.), alpha0=0.75*pi, mu30=5., mdot0=1.0, verbose=True)
+    plt.clf()
+    plot(a1, chi1, 'k-')
+    plot(a2, chi2, 'r-')
+    ylabel(r'$\chi$',fontsize=16)
+    xlabel(r'$\alpha$',fontsize=16)
+    savefig('compare_achi.png')
+    plt.clf()
+    plot(m1, omega1, 'k-')
+    plot(m2, omega2, 'r-')
+    xscale('log') ;   yscale('log')
+    xlabel(r'$M$',fontsize=16)
+    ylabel(r'$\Omega, \, {\rm s^{-1}}$',fontsize=16)
+    savefig('compare_momega.png')
+ 
+# aochi(omega0=2.*pi/0.5, chi0=pi*(0.5-1./36.), alpha0=0.75*pi, mu30=5., mdot0=1.0, verbose=True)
