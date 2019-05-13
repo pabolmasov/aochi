@@ -20,11 +20,11 @@ k1=1. # Sasha has 1.2
 k2=1.
 m0=1.4 # initial NS mass, Msun units
 mmax=2.0 # final NS mass
-q1=0.0
+q1=0.0 # deformation factor with magnetic field 
 qsat=1e-8 # saturation value of deformation
 
-rstar = 8.5 # radius (fixed! in GMsun/c**2 units; 10GMsun/c**2 units \simeq 15km )
-beta=10.
+rstar = 6.5 # radius (fixed! in GMsun/c**2 units; 10GMsun/c**2 units \simeq 15km )
+beta=10. # modulation factor
 
 # switches for physical effects:
 parfrey = False
@@ -39,7 +39,7 @@ deltam0=0.00563863/rstar**3  # mu \propto (Delta M/Delta M0)^-p during burial
 mufloor=0. # undecayable part of the field 
 xi=0.5 # Alfven radius modifier
 kIK=1./3. #k/2\pi from Illarionov-Kompaneets 1990
-xlosses=True # if we turn on X-ray pulsar losses (IK90-style)
+xlosses=True # if we turn on X-ray pulsar losses (IK90-style; or is it Ghosh-Lamb-style?)
 psrlosses=True # pulsar losses 
 gwlosses=True # GW losses 
 tohm=1e7 # Ohmic dissipation time
@@ -75,7 +75,7 @@ def torques(omega, mu, mdot, sichi, cochi, q, m):
     jrat= 2.03007e5 * maximum(sqrt(xi * ral), sqrt(rstar)) # either half Alfven radius or the radius of the star
     #    8.036e6*sqrt(xi)*mu**(2./7.)*m**(3./7.)*mdot**(-1./7.) # all re-calculated to domega/dM, M in Msun
     
-    jIK=2.11e6*mu**2.*omega**2./mdot/m # X-ray pulsar losses according to Illarionov-Kompaneets, 1990
+    jIK=2.11e6*mu**2.*omega**2./mdot/m # X-ray pulsar losses according to Illarionov-Kompaneets, 1990 (or Ghosh & Lamb?)
     jp=10.4*mu**2*omega**3/mdot 
     jpz=jp*(k0+k1*sichi**2) # spin-down law, see Philippov et al. (2014), eq 15
     jpx=jp*k2*sichi*cochi  # aligning torque, see Philippov et al. (2014), eq 16
@@ -124,13 +124,6 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
                 mueff=mufun(mu30, m-m0, deltam0, pslope, mufloor) 
         ofast=0.31*mueff**(6./7.)/m**(5./7.)/mdot**(3./7.)*omega # fastness parameter
         opul=127.6/xi*(mdot*sqrt(m)/mueff**2.)**(2./7.) # period when the light cylinder coincides with the radius of the magnetosphere
-        #        mdot=mdot0*exp(-(md-m0)/deltam0)
-        # we want the time step to adjust to the evolutionary time scales
-        # something like the torques:
-        dm1=(10.4*mueff**2*omega**2/mdot)
-        dm2=(8e6*sqrt(xi)*mueff**(2./7.)*m**(3./7.)*mdot**(-1./7.))/omega
-        dm3=2.11e6*mueff**2.*omega**1./mdot        
-        dm=dm0/(dm1*double((omega>=opul))+(dm3*double(ofast>=1.)+fabs(dm2-dm3)*double(ofast<1.))*double((omega<opul)))*(1.+(m-m0)/deltam0)
         if(((ofast>=1.)&xlosses)|(omega>opul)):
             afrac=pafrac # propeller state
         else:
@@ -144,7 +137,6 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
             pfrac = maximum(1., (opul/omega)**2) # Parfrey's modifier
         if(deathline & ((omega**2 * mueff) < death_muos)):
             pfrac = 0. # death line
-        
         if(abs(chi)>eqzero): # accurate treatment of the cases chi\to 0, alpha \to 0 (do we need it?)
             sichi=sin(chi)
             cochi=cos(chi)
@@ -163,6 +155,17 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
 
         jrat, jIK, jpx, jpz, jgwx, jgwz  = torques(omega, mueff, mdot, sichi, cochi, q, m)
         jrat *= afrac ; jIK *= bfrac ; jpx *= pfrac ; jpz *= pfrac
+        # we want the time step to adjust to the evolutionary time scales
+        dm = l/sqrt((jpx**2+jpz**2)*pfrac+(jrat-jIK)**2*afrac+jIK**2*bfrac)*dm0
+        # (sqrt(jpx**2+jpz**2)*pfrac+(jrat*afrac*(1.-bfrac)+fabs(jrat-jIK)*afrac)*(1.-pfrac)) * dm0
+        #        print("omega = "+str(omega)+", opul = "+str(opul))
+#        print("ofast = "+str(ofast))
+#        print("dm = "+str(dm))
+#        print("jp = "+str(sqrt(jpx**2+jpz**2)))
+#        print("jrat = "+str(jrat))
+#        print("jIK = "+str(jIK))
+#        ii=input(dm)
+
         # we need to estimate the working omega:
         domega=((1.+q*sichi**2)*(jrat*cosa-jIK-jpz-jgwz)-dq*l*cochi**2 - b * q *jrat * sina - q * jpx * sichi * cochi)/(q+1.)
         dchi=((q*(jrat*cosa-jIK-jpz-jgwz)+dq)*sichi*cochi -  b * jrat * sina *(1.+q*cochi**2)-(1.+q*cochi**2)*(jpx+jgwx))/(q+1.)/l
@@ -211,7 +214,7 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
         
         if((domega*dm/l)>0.1):
             print("warning! dO = "+str(domega*dm))
-            #        print("M = "+str(m)+";  Omega = "+str(omega)+"; alpha = "+str(a)+";  chi = "+str(chi))
+            print("M = "+str(m)+";  Omega = "+str(omega)+"; alpha = "+str(a)+";  chi = "+str(chi))
             dm0/=2.
             print("dm = "+str(dm))
 
@@ -272,7 +275,7 @@ def aochi(omega0=1., chi0=pi/4., alpha0=pi/2., mu30=1., mdot0=1.0, verbose=True)
             oeq=1.9*mdot**(3./7.)*mar**(5./7.)/mufun(mu30, mar-m0, deltam0, pslope, mufloor)**(6./7.)
         else:
             oeq=1.9*mdot**(3./7.)*mar**(5./7.)/mu30**(6./7.)
-#mu30**(6./7.)*(1.+(mar-m0)/deltam0)**(pslope*6./7.)
+            #mu30**(6./7.)*(1.+(mar-m0)/deltam0)**(pslope*6./7.)
 
         kest=2./(10./7.*pslope+1.)/(1.-2.*pslope/7.)**2*xi*mu30**(18./7.)*m0**(6./7.)*mdot**(-9./7.)/izero(m0,rstar)**3*(deltam0/4.65e-5)**3
         print("kest="+str(kest))
@@ -515,4 +518,4 @@ def aomap_achi():
     savefig('caoochi.eps')
 
 
-aochi(omega0=2.*pi/5., chi0=pi*(0.5-1./36.), alpha0=0.75*pi, mu30=1., mdot0=1.0, verbose=True)
+aochi(omega0=2.*pi/0.5, chi0=pi*(0.5-1./36.), alpha0=0.75*pi, mu30=5., mdot0=1.0, verbose=True)
