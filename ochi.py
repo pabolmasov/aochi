@@ -31,7 +31,7 @@ parfrey = False
 mburial=True # magnetic field burial 
 ifmudec=False # magnetic field decay
 deathline = False # death line
-ifIK = True # turns on IK90 scaling for spin-down (Ghosh-Lamb 78/79 instead)
+ifIK = False # turns on IK90 scaling for spin-down (Ghosh-Lamb 78/79 instead)
 
 death_muos = 13.1 # critical value of mu30 * Omega(s)^2 
 pafrac=0.0 # in propeller stage, pafrac of matter and angular momentum is actually accreted
@@ -519,8 +519,8 @@ def aomap_achi():
 
 def compare(infile1 = 'aotrace.dat', infile2 = 'aotrace1.dat'):
     data1 = loadtxt(infile1)  ;  data2 = loadtxt(infile2)
-    m1 = data1[:,1] ; omega1 = data1[:,2] ; a1 = data1[:,3] ; chi1 = data1[:,4]
-    m2 = data2[:,1] ; omega2 = data1[:,2] ; a2 = data2[:,3] ; chi2 = data2[:,4]
+    md1 = data1[:,0] ; m1 = data1[:,1] ; omega1 = data1[:,2] ; a1 = data1[:,3] ; chi1 = data1[:,4]
+    md2 = data2[:,0] ; m2 = data2[:,1] ; omega2 = data2[:,2] ; a2 = data2[:,3] ; chi2 = data2[:,4]
 
     plt.clf()
     plot(a1, chi1, 'k-')
@@ -535,5 +535,21 @@ def compare(infile1 = 'aotrace.dat', infile2 = 'aotrace1.dat'):
     xlabel(r'$M$',fontsize=16)
     ylabel(r'$\Omega, \, {\rm s^{-1}}$',fontsize=16)
     savefig('compare_momega.png')
- 
-# aochi(omega0=2.*pi/0.5, chi0=pi*(0.5-1./36.), alpha0=0.75*pi, mu30=5., mdot0=1.0, verbose=True)
+
+    # interpolation and difference:
+    mint = interp1d(md2, m2, bounds_error = False)
+    aint = interp1d(md2, a2, bounds_error = False)
+    chint = interp1d(md2, chi2, bounds_error = False)
+    oint = interp1d(md2, omega2, bounds_error = False)
+    plt.clf()
+    plot(aint(md1)-a1, chint(md1)-chi1, 'k-')
+    ylabel(r'$\Delta\chi$',fontsize=16)
+    xlabel(r'$\Delta\alpha$',fontsize=16)
+    savefig('compare_dachi.png')
+    plt.clf()
+    plot(md1, oint(md1)/omega1-1., 'k-')
+    ylabel(r'$M-M_0$',fontsize=16)
+    xlabel(r'$\Delta \Omega/\Omega$',fontsize=16)
+    savefig('compare_dome.png')
+    
+aochi(omega0=2.*pi/0.05, chi0=pi*(0.5-1./36.), alpha0=0.75*pi, mu30=1e-2, mdot0=1.0, verbose=True)
